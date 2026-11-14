@@ -1,0 +1,7 @@
+node_modules/
+.env
+private.pem
+public.pem
+# Consultas de Loggro (traen costos internos): no subirlas al repositorio
+productos-*.json
+*.loggro.json

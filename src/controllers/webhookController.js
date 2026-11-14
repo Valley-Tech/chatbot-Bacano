@@ -1,0 +1,197 @@
+import config from '../config/env.js';
+import { decryptRequest, encryptResponse, FlowEndpointException } from "../services/encryption.js";
+import { getNextScreen } from "../services/flow.js";
+import messageHandler from '../services/messageHandler.js';
+import crypto from "crypto";
+import { CRM_MODE, forwardWebhook, toMetaMessage } from '../services/crmAdapter.js';
+import { reportarFalla, entradaDe } from '../services/reportarFallas.js';
+import { sesion, numeroDeToken } from '../services/sesiones.js';
+
+const privateKey = config.PRIVATE_KEY;
+function isRequestSignatureValid(req) {
+  if(!config.APP_SECRET) {
+    console.warn("App Secret is not set up. Please Add your app secret in /.env file to check for request validation");
+    return true;
+  }
+  
+  const signatureHeader = req.get("x-hub-signature-256");
+  const signatureHeaderSha = signatureHeader.replace("sha256=", "");
+  const signatureBuffer = Buffer.from(signatureHeaderSha, "utf-8");
+  
+  const hmac = crypto.createHmac("sha256", config.APP_SECRET);
+  const digestString = hmac.update(req.rawBody).digest('hex');
+  const digestBuffer = Buffer.from(digestString, "utf-8");
+
+  if ( !crypto.timingSafeEqual(digestBuffer, signatureBuffer)) {
+    return false;
+  }
+  return true;
+}
+
+// El pedido, la reserva y la pantalla del Flow ya no son variables globales:
+// cada cliente tiene su sesión (services/sesiones.js), así dos pedidos a la vez no se mezclan.
+// Mensajes ya atendidos (wamid → momento). Evita responder dos veces al mismo mensaje.
+const SEEN_TTL_MS = 10 * 60 * 1000;
+const seenMessages = new Map();
+let gatewayWarned = false;
+let mirrorWarned = false;
+
+class WebhookController {  
+  /**
+   * Webhook de Meta (modo espejo). Se reenvía al CRM ANTES del filtro por
+   * número para que el CRM vea también estados y eventos. Se responde 200
+   * enseguida: Meta reintenta (y duplica) si el bot tarda en contestar.
+   */
+  async handleIncoming(req, res) {
+    // Modo gateway: el CRM es el único que entrega mensajes (por /crm/events).
+    // Si Meta sigue llamando aquí (la app propia del cliente aún suscrita a la
+    // WABA), se acepta con 200 y se ignora: procesarlo duplicaría cada respuesta.
+    if (CRM_MODE === 'gateway') {
+      if (!gatewayWarned && req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.length) {
+        gatewayWarned = true;
+        console.warn('[webhook] Meta sigue enviando webhooks directos al bot en modo gateway: desuscribe la app propia de la WABA. Se ignoran para no duplicar respuestas.');
+      }
+      return res.sendStatus(200);
+    }
+    forwardWebhook(req.body); // sin await: no frena la respuesta a Meta
+
+    const message = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
+    const recipientPhone = req.body.entry?.[0]?.changes[0]?.value?.metadata?.phone_number_id;
+
+    // Solo responde si el mensaje es para el número de este bot
+    if (recipientPhone !== process.env.BUSINESS_PHONE) {
+      return res.sendStatus(200); // Ignora el mensaje
+    }
+    const senderInfo = req.body.entry?.[0]?.changes[0]?.value?.contacts?.[0];
+    res.sendStatus(200);
+    if (message) await this.dispatch(message, senderInfo);
+  }
+
+  /**
+   * Evento del CRM (modo gateway): el CRM ya guardó el mensaje y comprobó que
+   * el bot está activo en esa conversación. Se reconstruye el mensaje con el
+   * formato de Meta y se entra por la misma lógica de siempre.
+   */
+  async handleCrmEvent(event) {
+    if (event.event !== 'message.received' || !event.message) return;
+    // Modo espejo: los mensajes ya llegan por el webhook de Meta; si además el
+    // CRM los reenvía (chatbot registrado en el CRM), se ignoran aquí.
+    if (CRM_MODE !== 'gateway') {
+      if (!mirrorWarned) {
+        mirrorWarned = true;
+        console.warn('[crm] evento del CRM ignorado en modo espejo (CRM_MODE=mirror): en este modo responde solo al webhook de Meta. Para que el CRM entregue los mensajes pon CRM_MODE=gateway.');
+      }
+      return;
+    }
+    // Doble seguro: el CRM ya filtra por "Atiende", pero si BUSINESS_PHONE está definido solo se atiende ese número.
+    if (process.env.BUSINESS_PHONE && event.integration?.phoneNumberId && event.integration.phoneNumberId !== process.env.BUSINESS_PHONE) return;
+    const { message, senderInfo } = toMetaMessage(event);
+    await this.dispatch(message, senderInfo);
+  }
+
+  /** La lógica original de handleIncoming, intacta, usada por los dos caminos. */
+  async dispatch(message, senderInfo) {
+    // Idempotencia: Meta reintenta si tardamos en responder y el CRM reintenta
+    // si fallamos; un mismo wamid solo se atiende una vez (memoria de 10 min).
+    if (message?.id) {
+      if (seenMessages.has(message.id)) {
+        console.warn('[webhook] mensaje repetido ignorado:', message.id);
+        return;
+      }
+      seenMessages.set(message.id, Date.now());
+      if (seenMessages.size > 5000) {
+        const limit = Date.now() - SEEN_TTL_MS;
+        for (const [id, at] of seenMessages) if (at < limit) seenMessages.delete(id);
+      }
+    }
+    // Números del personal u otros a los que el bot no debe responder (NO_RESPONDER_A).
+    if (config.NO_RESPONDER_A.includes(String(message?.from ?? '').replace(/\D/g, ''))) return;
+    try {
+      const s = sesion(message.from);
+      if (message?.type === 'interactive' && message?.interactive.type === 'nfm_reply') {
+        await messageHandler.handleIncomingMessage(message, senderInfo, s.ventana, s.datosPedido, s.pedidoStr);
+      }
+      else if (message?.type === 'order') {
+        // v3.5: el carrito se confirma antes del Flow (y se puede sumar, reemplazar o ser un adicional).
+        await messageHandler.recibirCarrito(message.from, message.order);
+      }
+      else {
+        await messageHandler.handleIncomingMessage(message, senderInfo);
+      }
+    } catch (error) {
+      console.error('Error procesando el mensaje:', error);
+      // v3.4: la falla aparece en el CRM, en el chat de este cliente, con su log.
+      reportarFalla(error, { to: message?.from, waMessageId: message?.id, step: 'atender el mensaje del cliente', entrada: entradaDe(message) });
+    }
+  }
+
+  async handleFlow(req, res) {
+    if (!privateKey) {
+      throw new Error(
+        'Private key is empty. Please check your env variable "PRIVATE_KEY".'
+      );
+    }
+
+    if(!isRequestSignatureValid(req)) {
+      return res.status(432).send();
+    }
+
+    let decryptedRequest = null;
+    try {
+      decryptedRequest = decryptRequest(req.body, privateKey, config.PASSPHRASE);
+    } catch (err) {
+      console.error(err);
+      reportarFalla(err, { step: 'Flow con endpoint: descifrar la solicitud (PRIVATE_KEY / PASSPHRASE)', level: err?.statusCode === 421 ? 'warning' : 'error' });
+      if (err instanceof FlowEndpointException) {
+        return res.status(err.statusCode).send();
+      }
+      return res.status(500).send();
+    }
+
+    
+    const { aesKeyBuffer, initialVectorBuffer, decryptedBody } = decryptedRequest;
+    let screenResponse;
+    // De quién es este Flow: viene en el flow_token ("pedido:<número>:…").
+    const numero = numeroDeToken(decryptedBody.flow_token);
+    const s = decryptedBody.action === 'ping' ? null : sesion(numero);
+    try {
+      if (decryptedBody.action === "ping") {
+        // handle health check request
+        screenResponse = await getNextScreen(decryptedBody);
+      } else if (decryptedBody.screen === 'DETAILS' || decryptedBody.screen === "SUMMARY") {
+        screenResponse = await getNextScreen(decryptedBody, s?.productos, s?.datosPedido?.monto, s?.pedidoStr, numero);
+      } else {
+        // Errores reportados por el cliente del Flow u otras pantallas: se acusa recibo.
+        screenResponse = await getNextScreen(decryptedBody);
+      }
+    } catch (error) {
+      console.error('[flow] error armando la pantalla:', error.message);
+      reportarFalla(error, { to: numero, step: `Flow con endpoint: pantalla ${decryptedBody.screen ?? decryptedBody.action}` });
+      return res.status(500).send();
+    }
+    if (s) {
+      s.ventana = decryptedBody.screen;
+      if (s.ventana === "SUMMARY") {
+        s.datosPedido.datos = decryptedBody.data;
+      }
+    }
+
+    res.send(encryptResponse(screenResponse, aesKeyBuffer, initialVectorBuffer));
+    
+  };
+
+  verifyWebhook(req, res) {
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    if (mode === 'subscribe' && token === config.WEBHOOK_VERIFY_TOKEN) {
+      res.status(200).send(challenge);
+      console.log('Webhook verified successfully!');
+    } else {
+      res.sendStatus(403);
+    }
+  }
+}
+
+export default new WebhookController();

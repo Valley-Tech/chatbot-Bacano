@@ -1,0 +1,32 @@
+{
+  "name": "bacanobot",
+  "version": "1.0.0",
+  "description": "Chatbot de WhatsApp de Bacano · comida mexicana, salchipapas, heladería y bebidas (ValleyTech)",
+  "main": "src/app.js",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "catalogo": "node scripts/generar-catalogo.mjs",
+    "verificar": "node scripts/verificar-catalogo.mjs",
+    "productos-crm": "node scripts/productos-crm.mjs",
+    "fotos": "node scripts/fotos.mjs",
+    "clave-flow": "node scripts/clave-flow.mjs",
+    "probar-clave": "node scripts/probar-clave.mjs"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "aws-sdk": "^2.1693.0",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "googleapis": "^144.0.0",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
