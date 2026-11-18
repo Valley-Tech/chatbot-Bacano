@@ -266,15 +266,15 @@ class MessageHandler {
   /** "Pedir": menú con las cartas (lista de WhatsApp). */
   async menuCartas(to, { soloBebidasYPostres = false } = {}) {
     const comida = {
-      title: 'Para comer',
+      title: 'Comidas Rápidas🌮🍔',
       rows: [
-        { id: 'cat:comidas', title: 'Comidas 🌮🍔', description: 'Tacos, quesabirrias, burritos, salchipapas, hamburguesas, asados y picadas' },
+        { id: 'cat:comidas', title: 'Tacos, Burritos y más', description: 'Tacos, burritos, salchipapas, hamburguesas y picadas' },
       ],
     };
     const postresYBebidas = [
       { title: 'Heladería y bebidas', rows: [
-        { id: 'cat:heladeria', title: 'Heladería y Botanas 🍨', description: 'Helados, banana split, chamoyada, brownie, malteadas y botanas' },
-        { id: 'cat:bebidas', title: 'Bebidas 🍹🥤', description: 'Jugos, frappés, smoothies, micheladas, sodas y gaseosas' },
+        { id: 'cat:heladeria', title: 'Heladería 🍨', description: 'Helados, banana split, malteadas' },
+        { id: 'cat:bebidas', title: 'Bebidas 🍹🥤', description: 'Jugos, frappés, smoothies y micheladas' },
       ] },
     ];
     await whatsappService.sendListMessage(to, {
