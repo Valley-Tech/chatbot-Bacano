@@ -13,6 +13,12 @@ import { buscarPlatos, enviarTarjetas, hablaDePlatos, textoSinFoto } from './bus
 import { product_names, CATALOGOS, areaPorId, grupoPorId, precios, nombrePorId, LOGGRO_LOCATION_STOCK } from '../data/catalogo.js';
 import config from '../config/env.js';
 import negocio from '../config/negocio.js';
+import { datosDe, recordar, usarNombres } from './memoria.js';
+import { datosEnTexto, telefonoLocal, nombreLimpio, PAGOS } from './datosCliente.js';
+
+// v1.1: la memoria muestra los productos por su nombre ("[Bot mostró el producto: Quesabirria]").
+usarNombres((id) => nombrePorId[id] ?? id);
+const TEXTO_PAGO = { Efectivo: 'en efectivo', Transferencia: 'por transferencia' };
 
 /**
  * BacanoBot · Bacano (comida mexicana, salchipapas, heladería y bebidas).
@@ -28,6 +34,8 @@ import negocio from '../config/negocio.js';
  *    entrega y pago → Efectivo o Transferencia (comprobante) → aviso a los números del
  *    negocio (plantilla), Google Sheets y comanda en Loggro. Recordatorios y adicionales.
  *  · Estado por cliente (sesiones.js); cada Flow lleva un flow_token con el número.
+ *  · v1.1 (= v3.9/v3.9.1 de Samuelito y BlackStation): memoria del turno para la IA, pago y
+ *    entrega escritos en el chat ("📝 Anoté: …"), "¿y el valor?", Flow precargado y textos cortos.
  */
 
 // Plantillas de aviso al negocio (créalas en la WABA de Bacano con las mismas 6 variables
@@ -60,7 +68,7 @@ const userOrderDataMap = {};      // número → datos del pedido (para avisos y
 
 // Cartas por palabra clave ("quiero ver las bebidas", "tienen helados"…).
 const PALABRAS_CARTA = [
-  [/\b(bebidas?|jugos?|frapp?es?|smoothies?|micheladas?|sodas?|gaseosas?|coca ?cola|aguas?|raspados?|ginger)\b/, 'bebidas'],
+  [/\b(bebidas?|tomar|beber|jugos?|frapp?es?|smoothies?|micheladas?|sodas?|gaseosas?|coca ?cola|aguas?|raspados?|ginger)\b/, 'bebidas'],
   [/\b(helados?|heladeria|postres?|brownie|banana split|chamoyada|helamoyado|malteadas?|nevados?|botanas?|gomitas?|copa)\b/, 'heladeria'],
   [/\b(comidas?|tacos?|burritos?|quesabirrias?|birria|birriamen|nachos|dorilocos?|tortas?|salchipapas?|hamburguesas?|burgers?|asados?|picadas?|carne asada|pechugas?|punta gorda|lomo|mexican[ao]s?)\b/, 'comidas'],
 ];
@@ -108,6 +116,10 @@ class MessageHandler {
         // Pedido de las últimas 3 h ("¿se demora?" después del cierre): lo atiende la IA, no el aviso de horario.
         const pedido = obtenerSesion(from)?.pedido;
         if (message?.type === 'text' && pedido?.enviadoAt && Date.now() - pedido.enviadoAt < 3 * 3600 * 1000) {
+          // v1.1: "¿y el valor?", "¿a qué cuenta?" sobre ese pedido → respuesta directa; lo demás, la IA (con memoria).
+          const anotados = datosEnTexto(message.text.body);
+          if (Object.keys(anotados).length) recordar(from, anotados);
+          if (await this.responderSobrePedido(from, message.text.body, anotados)) { await whatsappService.markAsRead(message.id); return; }
           await this.handleAssistandFlow(from, message.text.body, { botones: false });
           await whatsappService.markAsRead(message.id);
           return;
@@ -207,13 +219,16 @@ class MessageHandler {
   }
 
   firstName(senderInfo) {
-    return this.getSenderName(senderInfo).replace(/^[~@]+/, '').match(/^([\p{L}\p{N}_]+)/u)?.[1] || '';
+    // v1.1: "✨Josse✨" → "Josse" (antes salía "¡Hola 👋 !" con nombres que empiezan con emoji).
+    const limpio = nombreLimpio(this.getSenderName(senderInfo));
+    return (limpio || this.getSenderName(senderInfo).replace(/^[~@]+/, '')).match(/^([\p{L}\p{N}_]+)/u)?.[1] || '';
   }
 
   async sendWelcomeMessage(to, messageId, senderInfo) {
     try {
       const name = this.firstName(senderInfo);
-      const welcomeMessage = `¡Hola 👋 ${name}!\nBienvenid@ a ${negocio.bienvenida}\n\n¿En qué te puedo ayudar? 😊\n\nEscribe *ayuda* si la necesitas`;
+      // v1.1: sin "Escribe *ayuda* si la necesitas" (como en BlackStation); *ayuda* sigue funcionando.
+      const welcomeMessage = `¡Hola 👋 ${name}!\nBienvenid@ a ${negocio.bienvenida}\n\n¿En qué te puedo ayudar? 😊`;
       await whatsappService.sendMessage(to, welcomeMessage, messageId);
     } catch (error) {
       logAxiosError('sendWelcomeMessage', error);
@@ -248,7 +263,30 @@ class MessageHandler {
       },
     }
     if (!config.FLOW_ID_PEDIDO) return this.flowSinConfigurar(to);
+    // v1.1: el Flow se abre con lo que el cliente ya dijo (nombre, teléfono, entrega, pago, dirección).
+    if (config.FLOW_PRECARGA) {
+      action.parameters.flow_action = 'navigate';
+      action.parameters.flow_action_payload = { screen: 'DETAILS', data: { init_values: this.valoresFlowPedido(to) } };
+    }
     return await whatsappService.sendFlow(to, action, textos);
+  }
+
+  /**
+   * v1.1: valores iniciales del Flow de pedido. Las claves son los "name" de los campos del Flow de
+   * Bacano: name, phone, address ("domicilio" | "restaurante"), pago ("Efectivo" | "Transferencia")
+   * y recomendacion (ahí va la dirección que escribió en el chat). Solo van los que se conocen;
+   * el cliente los puede cambiar antes de enviar.
+   */
+  valoresFlowPedido(to) {
+    const d = datosDe(to);
+    const v = {};
+    if (d.nombre) v.name = d.nombre;
+    const tel = telefonoLocal(to);
+    if (/^3\d{9}$/.test(tel)) v.phone = tel;
+    if (d.entrega === 'domicilio' || d.entrega === 'restaurante') v.address = d.entrega;
+    if (PAGOS.includes(d.pago)) v.pago = d.pago;
+    if (d.direccion && d.entrega !== 'restaurante') v.recomendacion = `Dirección: ${d.direccion}`;
+    return v;
   }
 
   /** Sin FLOW_ID_PEDIDO en Railway, Meta rechaza el Flow (#131009): se avisa en vez de mandarlo roto. */
@@ -329,11 +367,12 @@ class MessageHandler {
       .filter((s) => s.product_items.length)
       .slice(0, 10);
     if (total === 30) console.warn(`[catalogo] la carta "${key}" tiene más de 30 productos: se muestran los primeros 30 (activa VARIANTES_META o divide la carta).`);
-    const tieneVariantes = sections.some((s) => s.product_items.some((p) => grupoPorId[p.product_retailer_id]));
     const template = {
       type: "product_list",
       header: { type: "text", text: header ?? carta.header },
-      body: { text: config.VARIANTES_META && tieneVariantes ? "Agrega lo que quieras al carrito 🛒 y envía tu pedido. En cada producto eliges el sabor o el tamaño." : "Agrega lo que quieras al carrito 🛒 y envía tu pedido." },
+      // v1.1: texto corto (Meta exige un texto en la lista de productos; antes: "Agrega lo que quieras al
+      // carrito 🛒 y envía tu pedido. En cada producto eliges el sabor o el tamaño.").
+      body: { text: 'Elige y agrega al carrito 🛒' },
       footer: { text: carta.marca },
       action: { catalog_id: config.CATALOG_ID, sections },
     };
@@ -445,6 +484,8 @@ class MessageHandler {
       await whatsappService.sendMessage(to, 'No encontré los datos de tu pedido 😔. Vuelve a enviarlo desde el carrito, por favor.');
       return;
     }
+    // v1.1: lo que puso en el Flow queda en la memoria del turno (para "¿y el valor?", adicionales, la IA).
+    recordar(to, { pago: datosPedido.datos.pago, nombre: datosPedido.datos.name, entrega: esDomicilio(datosPedido.datos) ? 'domicilio' : 'restaurante' });
     // Domicilio solo si eligió "domicilio" en el Flow, y una sola vez aunque el Flow llegue repetido.
     if (esDomicilio(datosPedido.datos) && !datosPedido.domicilioIncluido) {
       datosPedido.monto = Number(datosPedido.monto || 0) + valorDomicilio(datosPedido.datos);
@@ -654,6 +695,12 @@ class MessageHandler {
     const lower = t.toLowerCase().trim();
     const pregunta = this.isQuestion(lower);
 
+    // v1.1: pago, recoger/domicilio y dirección que el cliente escriba en cualquier momento.
+    const anotados = datosEnTexto(t);
+    if (Object.keys(anotados).length) recordar(from, anotados);
+    // v1.1: "¿y el valor?", "pago por transferencia", "a domicilio a la calle…" con un pedido en curso → respuesta directa.
+    if (await this.responderSobrePedido(from, t, anotados)) return;
+
     if (esCortesia(t)) {
       await whatsappService.sendMessage(from, this.pedidoPendiente(from) ? '¡Con gusto! 😊' : '¡Con gusto! 😊 Aquí estamos si necesitas algo más.');
       if (this.pedidoPendiente(from)) await this.recordarPedido(from);
@@ -669,7 +716,9 @@ class MessageHandler {
     if (lower === 'asesor') return this.sendContact(from);
 
     // "Hacer otra pregunta" o preguntas de tiempos, pagos, domicilio, estado del pedido → IA.
-    if (this.assistandState[from] || esPreguntaGeneral(t)) return this.handleAssistandFlow(from, t, { botones: pregunta });
+    // v1.1: un pedido con datos de pago ("3 tacos, pago por transferencia") no es una pregunta general.
+    const esPedido = hablaDePlatos(t) && (!pregunta || esPeticionDeProducto(t));
+    if (this.assistandState[from] || (esPreguntaGeneral(t) && !esPedido)) return this.handleAssistandFlow(from, t, { botones: pregunta });
 
     // Platos: la IA completa el nombre y se muestran las tarjetas del catálogo.
     // v3.6: "¿qué hamburguesas tienes?", "¿tienen malteadas?" piden un producto: solo tarjetas, sin texto de la IA.
@@ -744,7 +793,7 @@ class MessageHandler {
     if (p?.estado === 'enviado' && p.datos && Date.now() - (p.ultimoAt ?? p.enviadoAt ?? 0) < config.ADICIONAL_MINUTOS * 60000) {
       s.carritoNuevo = items;
       const { pedidoStr, monto } = this.resumenCarrito(items);
-      await whatsappService.sendInteractiveButtons(to, `Recibí estos productos 🛒\n\n${pedidoStr}\n*Total:* ${cop(monto)}\n\n¿Son un *adicional* para el pedido que ya enviaste? (mismos datos de entrega y pago, sin volver a llenar el formulario)`.slice(0, 1024), [
+      await whatsappService.sendInteractiveButtons(to, `Recibí estos productos 🛒\n\n${pedidoStr}\n*Total:* ${cop(monto)}\n\n¿Es un *adicional* al pedido que ya enviaste? (mismos datos, sin llenar el formulario otra vez)`.slice(0, 1024), [
         { type: 'reply', reply: { id: 'ad_si', title: 'Sí, es adicional' } },
         { type: 'reply', reply: { id: 'ad_no', title: 'Es un pedido nuevo' } },
       ]);
@@ -796,9 +845,82 @@ class MessageHandler {
   async pedirConfirmacion(to, { modo = 'nuevo' } = {}) {
     const s = sesion(to);
     const intro = modo === 'agregar' ? '✅ Listo, lo agregué.\n\n' : modo === 'reemplazar' ? '✅ Listo, cambié tu pedido.\n\n' : '';
-    const domicilio = negocio.domicilio ? `\n_(Si es a domicilio se suman ${cop(negocio.domicilio)})_` : '';
-    const texto = `${intro}*Tu pedido* 🛒\n\n${s.pedidoStr}\n\n*Subtotal:* ${cop(s.datosPedido?.monto)}${domicilio}\n\n¿Está todo bien?`;
+    // v1.1: sin "(Si es a domicilio se suman $3.000)" (el Flow muestra el total con el domicilio).
+    // Solo si el cliente YA dijo que es a domicilio se le muestra el valor, en corto.
+    const d = datosDe(to);
+    const nota = d.entrega === 'domicilio' && negocio.domicilio ? `\n_(+ ${cop(negocio.domicilio)} del domicilio)_` : '';
+    const texto = `${intro}*Tu pedido* 🛒\n\n${s.pedidoStr}\n\n*Subtotal:* ${cop(s.datosPedido?.monto)}${nota}${this.textoAnotado(to)}\n\n¿Está todo bien?`;
     await whatsappService.sendInteractiveButtons(to, texto.slice(0, 1024), BOTONES_CONFIRMAR);
+  }
+
+  /** v1.1: "📝 Anoté: a domicilio (Calle 10 # 9-133) · pagas en efectivo" (lo que el cliente ya dijo). */
+  textoAnotado(to) {
+    const d = datosDe(to);
+    const partes = [];
+    if (d.entrega === 'restaurante') partes.push('recoges en el restaurante');
+    if (d.entrega === 'domicilio') partes.push(`a domicilio${d.direccion ? ` (${d.direccion})` : ''}`);
+    if (d.pago) partes.push(`pagas ${TEXTO_PAGO[d.pago] ?? d.pago}`);
+    return partes.length ? `\n📝 Anoté: ${partes.join(' · ')}` : '';
+  }
+
+  /**
+   * v1.1 (= v3.9 de Samuelito): respuestas directas sobre el pedido en curso, sin pasar por la IA:
+   *   · "¿y el valor?", "¿cuánto es?" → el total de su pedido (y las cuentas si ya lo envió con transferencia);
+   *   · "pago por transferencia" / "paso a recoger" / "a domicilio a la calle…" (sin pedir un plato) → se anota y:
+   *     pedido sin terminar → se le recuerda; pedido ya enviado → cuentas con el total.
+   * Devuelve true si respondió.
+   */
+  async responderSobrePedido(to, t, anotados) {
+    const s = sesion(to);
+    const n = normalizar(t).replace(/[¿?¡!.,]/g, ' ').replace(/\s+/g, ' ').trim();
+    const palabras = n.split(' ').filter(Boolean).length;
+    const nombraPlato = hablaDePlatos(t);
+    const pendiente = this.pedidoPendiente(to);
+    const p = s.pedido;
+    const enviado = p?.estado === 'enviado' && Date.now() - (p.ultimoAt ?? p.enviadoAt ?? 0) < 3 * 3600 * 1000;
+    const preguntaTotal = palabras <= 8 && !nombraPlato && /\b(valor|total|cuanto (es|seria|serian|queda|quedaria|me sale|sale|debo|le debo|te debo|pago|toca|hay que pagar)|cuanto (vale|cuesta) (todo|el pedido|en total|mi pedido))\b/.test(n);
+    const d = datosDe(to);
+    const cuentas = `${negocio.cuentasBancarias}\n\nCuando transfieras, envíanos la captura del comprobante 😊`;
+
+    if (preguntaTotal && (pendiente || enviado)) {
+      if (enviado) {
+        await whatsappService.sendMessage(to, `El total de tu pedido es *${cop(s.datosPedido?.monto)}* 🧾\n\n${s.pedidoStr}`);
+        if ((p.datos?.pago ?? d.pago) === 'Transferencia') { sesion(to).esperandoComprobante = true; await whatsappService.sendMessage(to, cuentas); }
+        return true;
+      }
+      const domicilio = d.entrega === 'domicilio' && negocio.domicilio ? `\n_(+ ${cop(negocio.domicilio)} del domicilio)_` : '';
+      const resumen = `Tu pedido va así 🧾\n\n${s.pedidoStr}\n\n*Subtotal:* ${cop(s.datosPedido?.monto)}${domicilio}${this.textoAnotado(to)}`;
+      if (p.estado === 'confirmar') {
+        await whatsappService.sendInteractiveButtons(to, `${resumen}\n\n¿Lo confirmamos?`.slice(0, 1024), BOTONES_CONFIRMAR);
+      } else {
+        await whatsappService.sendMessage(to, resumen);
+        await this.menuPedido(to, { header: '¿Seguimos con tu pedido? 😊', body: 'Solo falta que llenes tus datos de entrega y pago. Toca *Pedido* 👇' });
+      }
+      return true;
+    }
+
+    if (!Object.keys(anotados).length || nombraPlato || palabras > 18) return false;
+    const partes = [];
+    if (anotados.entrega === 'restaurante') partes.push('recoges en el restaurante');
+    if (anotados.entrega === 'domicilio') partes.push(`es a domicilio${anotados.direccion ? ` (${anotados.direccion})` : ''}`);
+    if (anotados.pago) partes.push(`pagas ${TEXTO_PAGO[anotados.pago] ?? anotados.pago}`);
+    const anote = `Listo, anoté que ${partes.join(' y ')} 👌`;
+    if (enviado) {
+      if (anotados.pago === 'Transferencia') {
+        sesion(to).esperandoComprobante = true;
+        await whatsappService.sendMessage(to, `${anote}\nEl total es *${cop(s.datosPedido?.monto)}*.\n\n${cuentas}`);
+        return true;
+      }
+      await whatsappService.sendMessage(to, `${anote}. Ya se lo aviso al restaurante 😊`);
+      return true;
+    }
+    if (pendiente) {
+      await whatsappService.sendMessage(to, anote);
+      await this.recordarPedido(to);
+      return true;
+    }
+    await whatsappService.sendMessage(to, `${anote}\n¿Qué te gustaría pedir? Escribe el plato o toca *Pedir* 😊`);
+    return true;
   }
 
   /** Confirmó: se manda el Flow de datos (entrega y pago). */
@@ -823,7 +945,7 @@ class MessageHandler {
     s.modoCarrito = modo;
     await whatsappService.sendMessage(to, modo === 'agregar'
       ? 'Perfecto 👌 Elige lo que quieras agregar y envía el carrito 🛒: lo sumo a tu pedido.'
-      : 'Claro 👌 Arma tu carrito 🛒 con el pedido como lo quieres y envíalo: reemplazo el anterior.\n\n💡 En el carrito puedes cambiar cantidades o quitar productos antes de enviarlo.');
+      : 'Claro 👌 Arma tu carrito 🛒 como lo quieres y envíalo: reemplazo el anterior.');
     await this.menuCartas(to);
     this.programarRecordatorio(to);
   }

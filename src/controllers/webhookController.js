@@ -6,6 +6,8 @@ import crypto from "crypto";
 import { CRM_MODE, forwardWebhook, toMetaMessage } from '../services/crmAdapter.js';
 import { reportarFalla, entradaDe } from '../services/reportarFallas.js';
 import { sesion, numeroDeToken } from '../services/sesiones.js';
+import { anotar, recordar, textoEntrante } from '../services/memoria.js';
+import { nombreLimpio } from '../services/datosCliente.js';
 
 const privateKey = config.PRIVATE_KEY;
 function isRequestSignatureValid(req) {
@@ -108,6 +110,10 @@ class WebhookController {
     if (config.NO_RESPONDER_A.includes(String(message?.from ?? '').replace(/\D/g, ''))) return;
     try {
       const s = sesion(message.from);
+      // v1.1: memoria del turno (lo que escribió o tocó el cliente, y su nombre de WhatsApp).
+      anotar(message.from, 'user', textoEntrante(message));
+      const nombre = nombreLimpio(senderInfo?.profile?.name);
+      if (nombre) recordar(message.from, { nombre });
       if (message?.type === 'interactive' && message?.interactive.type === 'nfm_reply') {
         await messageHandler.handleIncomingMessage(message, senderInfo, s.ventana, s.datosPedido, s.pedidoStr);
       }

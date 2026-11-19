@@ -49,3 +49,13 @@ El cliente escribe lo que quiere ("me regalas 3 tacos de birria", "una hamburges
 6. **Cambios después de llenar el Flow** (quitar algo de un pedido que ya está en cocina): los atiende un asesor.
 
 Los recordatorios viven en la memoria del bot: si Railway reinicia el servicio, los pendientes no se envían.
+
+## v1.1 · Memoria del turno, datos del pedido en el chat y textos cortos
+
+- **Memoria del turno** (`src/services/memoria.js`): el bot guarda lo que se habló hoy (mensajes del cliente, respuestas, tarjetas, carritos y botones) y se lo pasa a la IA del CRM en cada pregunta, con una nota de lo que el cliente ya decidió. Dura hasta `HORA_CIERRE` + `MEMORIA_GRACIA_MIN` (60). Vive en la memoria del servidor: un redeploy la borra (despliega fuera del horario). `MEMORIA_IA=false` la apaga.
+- **Datos del pedido escritos en el chat** (`src/services/datosCliente.js`): "pago por transferencia / con Nequi / en efectivo", "paso a recoger", "a domicilio a la calle 10 # 5-20" se anotan (las preguntas, como "¿reciben transferencia?", no cuentan). El resumen del pedido muestra "📝 Anoté: …".
+- **Respuestas directas sobre el pedido**: "¿y el valor?", "¿cuánto es?" → el total (y las cuentas si ya lo envió con transferencia). "pago en efectivo" sin pedir un plato → "Listo, anoté…" + recordatorio del pedido.
+- Un pedido con datos de pago ("3 tacos, pago por transferencia") ya no se va a la IA: salen las tarjetas.
+- **Flow precargado** (`FLOW_PRECARGA`, apagado por defecto): ver `docs/FLOW-PEDIDO-PRECARGADO.md`.
+- **Textos más cortos**: sin "(Si es a domicilio se suman $3.000)" (solo "+ $3.000 del domicilio" si el cliente ya dijo que es a domicilio); la carta dice "Elige y agrega al carrito 🛒"; tarjetas: "Encontré N opciones para ti 👇 / Toca *Ver*, elige y agrega al carrito 🛒"; bienvenida sin "Escribe *ayuda*…".
+- **Búsqueda avanzada** con los nombres de Loggro: sinónimos (taquitos, quesa, ramen, doritos locos, chelada, gaseosa → Coca-Cola, raspao…), y la sección de la carta ya no mete platos de otra familia ("tacos" no trae burritos ni dorilocos; "salchipapa" no trae hamburguesas; "jugo" no trae frappés).

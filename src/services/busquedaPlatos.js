@@ -106,13 +106,22 @@ function puntaje(t, ws) {
 }
 
 // v3.6: sinónimos — cómo lo escribe el cliente → cómo se llama en la carta.
-// "hamburguesas" también encuentra "Clasic Burger", "Samuelito Burger"…; "hot dog" → "perro".
+// v1.1 (Bacano): con los nombres del JSON de Loggro (tacos, birria, dorilocos, micheladas…).
 const SINONIMOS_BASE = {
-  hamburguesa: ['burger'], burger: ['hamburguesa'], hamburgesa: ['burger', 'hamburguesa'],
-  perro: ['hotdog'], hotdog: ['perro'], dog: ['perro'],
-  sanduche: ['sandwich'], sanduch: ['sandwich'], sandwiche: ['sandwich'], sanwich: ['sandwich'],
-  batido: ['malteada'], milkshake: ['malteada'], malteda: ['malteada'],
-  gaseosa: ['soda'], refresco: ['gaseosa', 'soda'], pola: ['cerveza'], birra: ['cerveza'],
+  hamburguesa: ['burger'], burger: ['hamburguesa'], hamburgesa: ['burger', 'hamburguesa'], hamburguesita: ['hamburguesa'],
+  taquito: ['taco'], tako: ['taco'], tacos: ['taco'],
+  birria: ['quesabirria', 'birriamen'], quesa: ['quesabirria'], ramen: ['birriamen'],
+  burro: ['burrito'], burritos: ['burrito'],
+  dorito: ['doriloco'], dorilokos: ['doriloco'], doriloquito: ['doriloco'],
+  salchi: ['salchipapa'], salchipapita: ['salchipapa'], papas: ['salchipapa'],
+  carne: ['asada', 'punta', 'lomo'], churrasco: ['punta', 'lomo'],
+  helad: ['helado'], heladito: ['helado'], nieve: ['helado'], cono: ['cono'], barquillo: ['cono'],
+  banano: ['banana'], chamoy: ['chamoyada', 'helamoyado'], gomas: ['gomita'], gomita: ['gomita'],
+  batido: ['malteada'], milkshake: ['malteada'], malteda: ['malteada'], merengada: ['malteada'],
+  frape: ['frappe'], frapé: ['frappe'], smoothy: ['smoothie'], esmuti: ['smoothie'], cereza: ['cerezada'],
+  chelada: ['michelada'], michelada: ['michelada'], mixelada: ['michelada'],
+  gaseosa: ['coca', 'cocacola', 'ginger'], refresco: ['coca', 'cocacola', 'ginger'], cola: ['coca'], coca: ['coca'],
+  raspao: ['raspado'], granizado: ['raspado'], jamaica: ['jamaica'],
 };
 const SINONIMOS = new Map(Object.entries(SINONIMOS_BASE).map(([k, v]) => [raiz(normalizar(k)), v.map((w) => raiz(normalizar(w)))]));
 const alternativas = (t) => [t, ...(SINONIMOS.get(t) ?? [])];
@@ -128,16 +137,23 @@ export function buscarLocal(texto) {
   const ts = terminos(texto);
   if (!ts.length) return [];
   const res = [];
+  // v1.1: la sección de la carta solo cuenta para las palabras que NO están en ningún nombre.
+  // "tacos" está en "Tacos de Birria" → no trae los burritos ni los dorilocos de "Tacos y antojitos";
+  // "salchipapa" no trae las hamburguesas de "Salchipapas y burgers"; "jugo" no trae los frappés.
+  const enNombres = new Set(ts.filter((t) => [...INDICE.values()].some((e) => puntajeSin(t, e.palabras) >= 2)));
+  const frase = palabras(texto).filter((w) => !STOP.has(w)).join(' ');
   for (const e of INDICE.values()) {
     let score = 0;
     let especifico = false;
     let directo = 0; // palabras que coinciden tal cual (sin sinónimo): "hamburguesas" → primero las "Hamburguesa…"
     for (const t of ts) {
       if (puntaje(t, e.palabras) >= 2) directo += 1;
-      // La sección de la carta ("Salchipapas") cuenta un poco menos que el nombre del plato.
-      const p = Math.max(puntajeSin(t, e.palabras), 0.8 * puntajeSin(t, e.palabrasSeccion));
+      // La sección de la carta ("Postres y botanas") cuenta un poco menos que el nombre del plato.
+      const p = Math.max(puntajeSin(t, e.palabras), enNombres.has(t) ? 0 : 0.8 * puntajeSin(t, e.palabrasSeccion));
       if (p > 0) { score += p; if (!GENERICAS.has(t)) especifico = true; }
     }
+    // "agua" es genérica, pero si es el nombre completo del producto ("Agua"), es ese producto.
+    if (score > 0 && !especifico && frase && palabras(e.nombre).join(' ') === frase) especifico = true;
     if (score > 0 && especifico) res.push({ e, score, directo });
   }
   if (!res.length) return [];
@@ -151,7 +167,13 @@ export function buscarLocal(texto) {
 
 // Palabras que nombran un TIPO de plato (primera palabra de cada nombre, grupo o sección de la carta):
 // "salchipapa", "pizza", "hamburguesa", "jugo"… Un ingrediente solo ("pollo", "queso") no basta.
-const PLATOS = new Set([...INDICE.values()].flatMap((e) => [palabras(e.nombre)[0], palabras(e.tituloGrupo ?? '')[0], palabras(e.tituloSeccion)[0]]).filter((w) => w && w.length >= 3 && !GENERICAS.has(w) && !STOP.has(w)));
+// v1.1: más los tipos de plato de Bacano que no son la primera palabra del nombre ("cerezada",
+// "smoothie", "split") y cómo los llama la gente ("taquitos", "doritos locos", "chelada").
+const PALABRAS_PLATO = ['cerezada', 'smoothie', 'split', 'birria', 'quesabirria', 'birriamen', 'nachos', 'dorilocos', 'chamoyada', 'helamoyado', 'botanas', 'gomitas', 'raspado', 'soda', 'michelada', 'frappe', 'cono', 'copa', 'brownie', 'nevado', 'picada', 'asado', 'pechuga', 'lomo', 'taquito', 'doritos', 'chelada', 'gaseosa', 'refresco', 'coca', 'cocacola'];
+const PLATOS = new Set([
+  ...[...INDICE.values()].flatMap((e) => [palabras(e.nombre)[0], palabras(e.tituloGrupo ?? '')[0], palabras(e.tituloSeccion)[0]]),
+  ...PALABRAS_PLATO.flatMap(palabras),
+].filter((w) => w && w.length >= 3 && !GENERICAS.has(w) && !STOP.has(w)));
 const INTENCION = /\b(quiero|quisiera|regala|regalas|regalame|regalen|dame|deme|me das|me da|manda|mandame|manden|traeme|tienen|tiene|hay|venden|pedir|ordenar|antojo|una|un|uno|dos|tres|cuatro|cinco|\d+)\b/;
 
 /**
@@ -163,6 +185,9 @@ export function hablaDePlatos(texto) {
   const res = buscarLocal(texto);
   if (!res.length) return false;
   const ts = terminos(texto);
+  // "agua", "ginger": el mensaje es el nombre completo de un producto.
+  const frase = palabras(texto).filter((w) => !STOP.has(w)).join(' ');
+  if (frase && res.some((r) => palabras(r.e.nombre).join(' ') === frase)) return true;
   if (ts.some((t) => puntajeSin(t, [...PLATOS]) >= 2)) return true;
   return INTENCION.test(normalizar(texto));
 }
@@ -282,17 +307,17 @@ export async function buscarPlatos(to, texto) {
 const enviar = (to, interactive) => sendToWhatsApp({ messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'interactive', interactive });
 
 /**
- * Texto que acompaña las tarjetas. En UNA sola línea, sin asteriscos ni saltos de línea: es el
- * formato que Meta acepta para el carrusel (confirmado en Postman y en producción en SamuelitoBot);
- * el texto con saltos de línea dobles y *negritas* fue rechazado con #131009.
+ * Texto que acompaña las tarjetas. (El #131009 del carrusel lo causaban productos sin foto, no los
+ * saltos de línea ni las *negritas*: BlackStation y Samuelito usan este mismo formato y Meta lo acepta.)
  */
 function textoCuerpo(tarjetas, texto) {
+  // v1.1 (= v3.9.1 de Samuelito y BlackStation): mensaje corto. La cantidad solo aparece si el
+  // cliente pidió más de una ("3 tacos").
   const cantidad = cantidadPedida(texto);
-  const variantes = tarjetas.some((t) => t.conVariantes);
   const n = tarjetas.length;
-  const intro = n === 1 ? '¡Aquí la tienes! 👇' : `Encontré ${n} opciones para ti 👇${n > 2 ? ' Desliza para verlas todas.' : ''}`;
-  const pasos = `Toca Ver${variantes ? ', elige el tipo o el tamaño' : ''} y agrégala al carrito 🛒${cantidad && cantidad > 1 ? ` (pon la cantidad: ${cantidad})` : ''}.`;
-  return `${intro} ${pasos} Cuando tengas todo, envía el carrito y te confirmo el pedido 😊`;
+  const intro = n === 1 ? '¡Aquí la tienes! 👇' : `Encontré ${n} opciones para ti 👇`;
+  const pasos = `Toca *Ver*, elige y agrega al carrito 🛒${cantidad && cantidad > 1 ? ` (pon la cantidad: *${cantidad}*)` : ''}`;
+  return `${intro}\n\n${pasos}`;
 }
 
 export async function enviarTarjetas(to, tarjetas, texto = '') {

@@ -71,6 +71,11 @@ export default {
   DOMICILIO_VALOR: Number(process.env.DOMICILIO_VALOR ?? 3000),
   HORA_APERTURA: process.env.HORA_APERTURA || '17:00',           // turno: 5:00 p. m.
   HORA_CIERRE: process.env.HORA_CIERRE || '23:00',               // a 11:00 p. m.
+  // v1.1: memoria del turno. MEMORIA_IA=false → la IA usa solo el historial del CRM (como antes).
+  MEMORIA_IA: !/^(0|false|no)$/i.test(process.env.MEMORIA_IA || 'true'),
+  // v1.1: abrir el Flow de pedido con los datos que el cliente ya dio (nombre, teléfono, entrega, pago).
+  // Actívalo SOLO después de publicar el Flow con "init-values" (docs/FLOW-PEDIDO-PRECARGADO.md).
+  FLOW_PRECARGA: /^(1|true|si|yes)$/i.test(process.env.FLOW_PRECARGA || 'false'),
   // Seguimiento del pedido sin terminar y adicionales (igual que BlackStation v3.5)
   RECORDATORIO_PEDIDO_MIN: Number(process.env.RECORDATORIO_PEDIDO_MIN) || 5, // cada cuántos minutos se recuerda
   RECORDATORIO_PEDIDO_MAX: Number(process.env.RECORDATORIO_PEDIDO_MAX ?? 2),  // cuántas veces como máximo (0 = nunca)
