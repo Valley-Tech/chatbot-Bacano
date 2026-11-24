@@ -1,6 +1,6 @@
 # Cartas de BacanoBot
 
-Generado de `src/data/catalogo.js` (82 productos, 16 grupos de variantes). Precios de referencia de Loggro; el precio que ve el cliente es el del catálogo de Meta.
+Generado de `src/data/catalogo.js` (87 productos, 16 grupos de variantes). Precios de referencia de Loggro; el precio que ve el cliente es el del catálogo de Meta.
 Cada carta es un mensaje *product_list* (máx. 30 productos). ID = _id de Loggro = ID de contenido en Meta.
 
 ## Comidas 🌮🍔 · `comidas` (14 tarjetas con variantes · 36 productos sin agrupar)
@@ -44,7 +44,7 @@ Cada carta es un mensaje *product_list* (máx. 30 productos). ID = _id de Loggro
 | Asados y picadas 🔥 | Picadas | 5 personas | $60.000 | `6ae8e17b43188be97f0ab9b8` |
 | Asados y picadas 🔥 | Picadas | 6 personas | $70.000 | `6ae8e17b43188be97f0ab9bb` |
 
-## Heladería y Botanas 🍨 · `heladeria` (10 tarjetas con variantes · 19 productos sin agrupar)
+## Heladería y Botanas 🍨 · `heladeria` (12 tarjetas con variantes · 21 productos sin agrupar)
 
 | Sección | Producto | Variante | Precio | ID |
 |---|---|---|---:|---|
@@ -62,13 +62,15 @@ Cada carta es un mensaje *product_list* (máx. 30 productos). ID = _id de Loggro
 | Helados 🍦 | Banana Split |  | $15.000 | `6ae3b9d427548bc4dd01aae6` |
 | Helados 🍦 | Helamoyado |  | $15.000 | `6ae3ba9ecf805bbb35fad33e` |
 | Helados 🍦 | Chamoyada |  | $15.000 | `6ae3ddeebbbc4287b3e5b40b` |
+| Helados 🍦 | Mexipaleta |  | $7.000 | `6afa701f9603187f3d464c12` |
+| Helados 🍦 | Paletas |  | $1.500 | `6b00e7c6ada2be2853f6e41e` |
 | Postres y botanas 🍫 | Brownie |  | $12.000 | `6ae3b96b4888e1915220ac71` |
 | Postres y botanas 🍫 | Malteadas |  | $13.000 | `6ae3ba264888e19152221d4f` |
 | Postres y botanas 🍫 | Nevado de Café |  | $13.000 | `6ae3ba532f9b13af46cadb03` |
 | Postres y botanas 🍫 | Botanas Mexicanas | Botanas Mexicanas | $7.000 | `6af4ed30e1a589a3d09d34a7` |
 | Postres y botanas 🍫 | Botanas Mexicanas | Gomitas Enchiladas | $7.000 | `6af4ed30e1a589a3d09d34aa` |
 
-## Bebidas 🍹🥤 · `bebidas` (12 tarjetas con variantes · 27 productos sin agrupar)
+## Bebidas 🍹🥤 · `bebidas` (15 tarjetas con variantes · 30 productos sin agrupar)
 
 | Sección | Producto | Variante | Precio | ID |
 |---|---|---|---:|---|
@@ -97,5 +99,8 @@ Cada carta es un mensaje *product_list* (máx. 30 productos). ID = _id de Loggro
 | Gaseosas y agua 🥤 | Coca-Cola | 1 L | $6.000 | `6af30a5e48065de9dd68c48f` |
 | Gaseosas y agua 🥤 | Coca-Cola | 1.5 L | $9.000 | `6af30a5e48065de9dd68c492` |
 | Gaseosas y agua 🥤 | Coca-Cola | 400 ml | $4.000 | `6af30b06944593af9b671752` |
+| Gaseosas y agua 🥤 | Postobón Manzana Personal |  | $4.000 | `6b00e26629e2f671ebd4fb0e` |
+| Gaseosas y agua 🥤 | Gaseosa Quatro (Toronja) |  | $4.000 | `6b00e23829e2f671ebd4845e` |
+| Gaseosas y agua 🥤 | Soda |  | $4.000 | `6b00da6f61b4dedd039b3ac0` |
 | Gaseosas y agua 🥤 | Agua |  | $2.000 | `6ae171176a9e5dc2f94443e1` |
 | Gaseosas y agua 🥤 | Ginger |  | $4.000 | `6af674eecb8f3c2e1d4a9fe8` |

@@ -27,17 +27,22 @@ const CADA_MS = 6 * 3600 * 1000;
 /** ¿El enlace tiene formato de foto que Meta muestra? */
 export const enlaceValido = (u) => /^https?:\/\/\S+\.(jpe?g|png)(\?\S*)?$/i.test(String(u ?? '').trim()) && !String(u).includes(GENERICA);
 
-/** Lector de CSV con ";" y comillas (como lo guarda Excel). */
+/**
+ * Lector de CSV con comillas (como lo guarda Excel). v1.2: el separador se detecta solo (";",
+ * tabulación o ","): Excel en Windows guarda con tabulaciones y en Windows-1252.
+ */
 export function leerCsv(texto) {
   const lineas = [];
   let campo = '', fila = [], comillas = false;
-  const t = String(texto ?? '').replace(/^﻿/, '');
+  const t = String(texto ?? '').replace(/^\uFEFF/, '');
+  const cab0 = t.slice(0, t.indexOf('\n') >>> 0);
+  const SEP = ['\t', ';', ','].sort((a, b) => cab0.split(b).length - cab0.split(a).length)[0];
   for (let i = 0; i < t.length; i += 1) {
     const c = t[i];
     if (comillas) {
       if (c === '"' && t[i + 1] === '"') { campo += '"'; i += 1; } else if (c === '"') comillas = false; else campo += c;
     } else if (c === '"') comillas = true;
-    else if (c === ';') { fila.push(campo); campo = ''; }
+    else if (c === SEP) { fila.push(campo); campo = ''; }
     else if (c === '\n') { fila.push(campo.replace(/\r$/, '')); lineas.push(fila); fila = []; campo = ''; }
     else campo += c;
   }
@@ -48,13 +53,20 @@ export function leerCsv(texto) {
   return { cab, filas: utiles.slice(1).map((l) => Object.fromEntries(cab.map((k, i) => [k, (l[i] ?? '').trim()]))) };
 }
 
+/** Texto del archivo en UTF-8 o, si no lo es (Excel en Windows), en Windows-1252. */
+export function leerTexto(ruta) {
+  const buf = readFileSync(ruta);
+  const utf8 = buf.toString('utf8');
+  return utf8.includes('\uFFFD') ? buf.toString('latin1') : utf8;
+}
+
 // id del producto → image_link (del CSV de Meta)
 let fotoPorId = new Map();
 let cargado = false;
 function cargar() {
   try {
     if (!existsSync(RUTA)) { console.warn('[fotos] no existe docs/catalogo-meta-bacano.csv: no se puede saber qué productos tienen foto (se envían todos)'); return; }
-    const { filas } = leerCsv(readFileSync(RUTA, 'utf8'));
+    const { filas } = leerCsv(leerTexto(RUTA));
     fotoPorId = new Map(filas.filter((f) => f.id).map((f) => [f.id, f.image_link]));
     cargado = fotoPorId.size > 0;
     const con = [...fotoPorId.values()].filter(enlaceValido).length;
@@ -72,11 +84,24 @@ async function revisar(url) {
   const previa = revisadas.get(url);
   if (previa && Date.now() - previa.at < CADA_MS) return previa.ok;
   let ok = true; // sin internet o error raro: se confía en el formato del enlace
+  let detalle = '';
   try {
-    const r = await axios.head(url, { timeout: 5000, validateStatus: () => true, maxRedirects: 3 });
-    if (r.status === 404 || r.status === 403 || r.status === 410) ok = false;
-    else if (r.status >= 200 && r.status < 300) ok = /^image\//i.test(String(r.headers['content-type'] ?? 'image/'));
+    // v1.2: antes una foto contaba como "no existe" si el servidor respondía a HEAD con 403 o con un
+    // content-type que no fuera image/*. Las fotos de Loggro (pirpos-files.s3) se guardan como
+    // "binary/octet-stream": todas quedaban "sin foto" y el bot decía "Todavía no está en nuestro
+    // catálogo de WhatsApp" con productos que sí tienen foto en Meta. Ahora:
+    //   · solo cuenta como faltante un 404/410, o un 403 que se repite al pedir la imagen (GET);
+    //   · cualquier respuesta 2xx que no sea una página de error (HTML/XML/JSON) es una foto.
+    let r = await axios.head(url, { timeout: 5000, validateStatus: () => true, maxRedirects: 3 });
+    if (r.status === 403 || r.status === 405 || r.status >= 500) {
+      r = await axios.get(url, { timeout: 5000, validateStatus: () => true, maxRedirects: 3, responseType: 'arraybuffer', headers: { Range: 'bytes=0-0' } });
+    }
+    const tipo = String(r.headers?.['content-type'] ?? '');
+    detalle = `${r.status} ${tipo}`.trim();
+    if (r.status === 404 || r.status === 410 || r.status === 403) ok = false;
+    else if (r.status >= 200 && r.status < 300) ok = !/(text\/html|xml|json)/i.test(tipo);
   } catch { /* se mantiene ok = true */ }
+  if (!ok) console.warn(`[fotos] ${url.split('/').pop()} no se pudo comprobar (${detalle}): ese producto no saldrá en tarjetas`);
   revisadas.set(url, { ok, at: Date.now() });
   return ok;
 }
@@ -92,6 +117,16 @@ export function tieneFoto(id) {
   const url = fotoPorId.get(String(id));
   if (!enlaceValido(url)) return false;
   return revisadas.get(url)?.ok !== false;
+}
+
+/**
+ * v1.2: ¿el producto tiene foto válida en el CSV del catálogo? (aunque SOLO_CON_FOTO esté apagado).
+ * La usa "el menú de los tacos": carrusel si todos tienen foto; si no, la lista de productos.
+ */
+export function fotoEnCatalogo(id) {
+  if (!cargado) return true;
+  const url = fotoPorId.get(String(id));
+  return enlaceValido(url) && revisadas.get(url)?.ok !== false;
 }
 
 /** Revisa en internet (si hace falta) las fotos de estos productos antes de armar las tarjetas. */

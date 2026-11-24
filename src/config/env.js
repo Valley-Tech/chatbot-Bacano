@@ -76,6 +76,10 @@ export default {
   // v1.1: abrir el Flow de pedido con los datos que el cliente ya dio (nombre, teléfono, entrega, pago).
   // Actívalo SOLO después de publicar el Flow con "init-values" (docs/FLOW-PEDIDO-PRECARGADO.md).
   FLOW_PRECARGA: /^(1|true|si|yes)$/i.test(process.env.FLOW_PRECARGA || 'false'),
+  // v1.2: la IA recibe la fecha y hora de Colombia y si el restaurante está abierto o cerrado.
+  HORA_EN_IA: !/^(0|false|no)$/i.test(process.env.HORA_EN_IA || 'true'),
+  // v1.2: menú en una página web (solo se envía si el cliente lo pide: "el menú en la página web").
+  MENU_WEB_URL: process.env.MENU_WEB_URL || '',
   // Seguimiento del pedido sin terminar y adicionales (igual que BlackStation v3.5)
   RECORDATORIO_PEDIDO_MIN: Number(process.env.RECORDATORIO_PEDIDO_MIN) || 5, // cada cuántos minutos se recuerda
   RECORDATORIO_PEDIDO_MAX: Number(process.env.RECORDATORIO_PEDIDO_MAX ?? 2),  // cuántas veces como máximo (0 = nunca)
@@ -84,7 +88,9 @@ export default {
   TARJETAS_CARRUSEL: !/^(0|false|no)$/i.test(process.env.TARJETAS_CARRUSEL || 'true'),
   // Carrusel y tarjeta solo con productos que tienen foto válida en Meta (docs/catalogo-meta-bacano.csv).
   SOLO_CON_FOTO: !/^(0|false|no)$/i.test(process.env.SOLO_CON_FOTO || 'true'),
-  VERIFICAR_FOTOS: !/^(0|false|no)$/i.test(process.env.VERIFICAR_FOTOS || 'true'), // revisa en línea que la foto exista
+  // v1.2: apagado por defecto. La fuente de verdad es el CSV de Meta (docs/catalogo-meta-bacano.csv);
+  // la revisión en línea daba falsos "sin foto" con las fotos de Loggro. VERIFICAR_FOTOS=true la vuelve a activar.
+  VERIFICAR_FOTOS: /^(1|true|si|yes)$/i.test(process.env.VERIFICAR_FOTOS || 'false'),
   // Números a los que el bot NO responde (p. ej. el personal del restaurante que escribe a la línea).
   NO_RESPONDER_A: (process.env.NO_RESPONDER_A || '').split(',').map((n) => n.replace(/\D/g, '')).filter(Boolean),
   LOGGRO_TABLE_ID: process.env.LOGGRO_TABLE_ID,               // mesa "Domicilios/WhatsApp" en Loggro

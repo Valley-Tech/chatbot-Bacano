@@ -60,6 +60,7 @@ export const product_names = {
   "Frappé Maracuyá en Leche": "6af3523ac722258ce6860270",
   "Frappé Cerezada": "6af3523ac722258ce6860273",
   // Gaseosas
+  "Gaseosa Quatro (Toronja)": "6b00e23829e2f671ebd4845e",
   "Ginger": "6af674eecb8f3c2e1d4a9fe8",
   // COMIDAS
   "Hamburguesa Sencilla": "6ae8d90c8fd15682eef54ced",
@@ -76,6 +77,9 @@ export const product_names = {
   "Jugo de Lulo en Leche": "6af355150211d08070345099",
   "Jugo de Fresa en Leche": "6af355150211d0807034509c",
   "Jugo de Guanábana en Leche": "6af355150211d0807034509f",
+  // HELADERIA & BOTANAS
+  "Mexipaleta": "6afa701f9603187f3d464c12",
+  // BEBIDAS
   "Michelada Frutos Amarillos": "6af34f1f0211d08070250fcb",
   "Michelada Frutos Rojos": "6af34f1f0211d08070250fce",
   "Michelada Frutos Verdes": "6af34f1f0211d08070250fd1",
@@ -87,12 +91,16 @@ export const product_names = {
   "Nachos con Birria": "6ae3b216ac2fc19d00801830",
   // HELADERIA & BOTANAS
   "Nevado de Café": "6ae3ba532f9b13af46cadb03",
+  "Paletas": "6b00e7c6ada2be2853f6e41e",
   // COMIDAS
   "Picada para 2 personas": "6ae8e17b43188be97f0ab9af",
   "Picada para 3 personas": "6ae8e17b43188be97f0ab9b2",
   "Picada para 4 personas": "6ae8e17b43188be97f0ab9b5",
   "Picada para 5 personas": "6ae8e17b43188be97f0ab9b8",
   "Picada para 6 personas": "6ae8e17b43188be97f0ab9bb",
+  // Gaseosas
+  "Postobón Manzana Personal": "6b00e26629e2f671ebd4fb0e",
+  // COMIDAS
   "Quesabirria": "6ae8dfbf887b3051f9fae6bc",
   // BEBIDAS
   "Raspado al Diablito": "6ae3baeb961e16e9ef024e27",
@@ -102,6 +110,8 @@ export const product_names = {
   "Salchipapa Sencilla": "6ae8e4b017b412cdc5d625e0",
   "Salchipapa Mixta": "6ae8e4b017b412cdc5d625e3",
   "Salchipapa Especial": "6ae8e4b017b412cdc5d625e6",
+  // Gaseosas
+  "Soda": "6b00da6f61b4dedd039b3ac0",
   // BEBIDAS
   "Smoothie Piñacafresa": "6ae3ddafbbbc4287b3e4b73e",
   "Smoothie Maracupiña": "6ae3bb75fa10411a78e18c49",
@@ -159,6 +169,7 @@ export const precios = {
   "Frappé Lulo en Leche": 9000,
   "Frappé Maracuyá en Leche": 9000,
   "Frappé Cerezada": 9000,
+  "Gaseosa Quatro (Toronja)": 4000,
   "Ginger": 4000,
   "Hamburguesa Sencilla": 16000,
   "Hamburguesa Especial": 27000,
@@ -172,6 +183,7 @@ export const precios = {
   "Jugo de Lulo en Leche": 10000,
   "Jugo de Fresa en Leche": 10000,
   "Jugo de Guanábana en Leche": 10000,
+  "Mexipaleta": 7000,
   "Michelada Frutos Amarillos": 17000,
   "Michelada Frutos Rojos": 17000,
   "Michelada Frutos Verdes": 17000,
@@ -180,11 +192,13 @@ export const precios = {
   "Malteadas": 13000,
   "Nachos con Birria": 30000,
   "Nevado de Café": 13000,
+  "Paletas": 1500,
   "Picada para 2 personas": 30000,
   "Picada para 3 personas": 40000,
   "Picada para 4 personas": 50000,
   "Picada para 5 personas": 60000,
   "Picada para 6 personas": 70000,
+  "Postobón Manzana Personal": 4000,
   "Quesabirria": 28000,
   "Raspado al Diablito": 10000,
   "Salchipapa Mexicana Birria": 30000,
@@ -192,6 +206,7 @@ export const precios = {
   "Salchipapa Sencilla": 14000,
   "Salchipapa Mixta": 18000,
   "Salchipapa Especial": 20000,
+  "Soda": 4000,
   "Smoothie Piñacafresa": 18000,
   "Smoothie Maracupiña": 14000,
   "Soda de Jamaica": 9000,
@@ -269,6 +284,8 @@ export const imagenPorId = {
   "6ae8e17b43188be97f0ab9b8": "https://pirpos-files.s3.amazonaws.com/6ae40bbe8ab1d45d08f707ad.jpeg",
   "6ae8e17b43188be97f0ab9bb": "https://pirpos-files.s3.amazonaws.com/6ae40bbe8ab1d45d08f707ad.jpeg",
   "6ae8dfbf887b3051f9fae6bc": "https://pirpos-files.s3.amazonaws.com/6ae3b2b8fd5558bc329fba7d.jpeg",
+  "6ae8e5a443188be97f0ddadd": "https://pirpos-files.s3.amazonaws.com/6ae40b44d7b104ae7d0857a9.jpeg",
+  "6ae8e5a443188be97f0ddae0": "https://pirpos-files.s3.amazonaws.com/6ae40b44d7b104ae7d0857a9.jpeg",
   "6ae8e4b017b412cdc5d625e0": "https://pirpos-files.s3.amazonaws.com/6ae40b44d7b104ae7d0857a9.jpeg",
   "6ae8e4b017b412cdc5d625e3": "https://pirpos-files.s3.amazonaws.com/6ae40b44d7b104ae7d0857a9.jpeg",
   "6ae8e4b017b412cdc5d625e6": "https://pirpos-files.s3.amazonaws.com/6ae40b44d7b104ae7d0857a9.jpeg",
@@ -281,6 +298,7 @@ export const imagenPorId = {
   "6ae8dbc73dd959d80c2b12f6": "https://pirpos-files.s3.amazonaws.com/6ae1013ec47d71e1e6f71948.jpeg",
   "6ae8dbc73dd959d80c2b12f9": "https://pirpos-files.s3.amazonaws.com/6ae1013ec47d71e1e6f71948.jpeg",
   "6ae8dbc73dd959d80c2b12fc": "https://pirpos-files.s3.amazonaws.com/6ae1013ec47d71e1e6f71948.jpeg",
+  "6af4edf1b8e6258202b8cfe8": "https://pirpos-files.s3.amazonaws.com/6ae1013ec47d71e1e6f71948.jpeg",
 };
 
 // Cartas: cada una es un mensaje product_list (máx. 30 productos, 10 secciones). Con VARIANTES_META
@@ -353,6 +371,8 @@ export const CATALOGOS = {
         "Banana Split",
         "Helamoyado",
         "Chamoyada",
+        "Mexipaleta",
+        "Paletas",
       ] },
       { title: "Postres y botanas 🍫", productos: [
         "Brownie",
@@ -397,6 +417,9 @@ export const CATALOGOS = {
         "Coca-Cola 1 L",
         "Coca-Cola 1.5 L",
         "Coca-Cola 400 ml",
+        "Postobón Manzana Personal",
+        "Gaseosa Quatro (Toronja)",
+        "Soda",
         "Agua",
         "Ginger",
       ] },
@@ -426,8 +449,10 @@ export const AREAS_LOGGRO = {
     "Chamoyada",
     "Copa de Helado Decorada",
     "Helamoyado",
+    "Mexipaleta",
     "Malteadas",
     "Nevado de Café",
+    "Paletas",
   ],
   // área 571fb3
   "6ae7ee0082a4233c1c571fb3": [
@@ -480,6 +505,8 @@ export const AREAS_LOGGRO = {
     "Frappé Lulo en Leche",
     "Frappé Maracuyá en Leche",
     "Frappé Cerezada",
+    "Gaseosa Quatro (Toronja)",
+    "Ginger",
     "Jugo de Fresa en Agua",
     "Jugo de Lulo en Agua",
     "Jugo de Maracuyá en Agua",
@@ -493,7 +520,9 @@ export const AREAS_LOGGRO = {
     "Michelada Frutos Verdes",
     "Michelada Azul",
     "Michelada de la Casa",
+    "Postobón Manzana Personal",
     "Raspado al Diablito",
+    "Soda",
     "Smoothie Piñacafresa",
     "Smoothie Maracupiña",
     "Soda de Jamaica",

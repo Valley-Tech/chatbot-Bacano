@@ -23,7 +23,7 @@
  *     CORRECCIONES de abajo arregla lo que se sabe; lo demás queda anotado en REVISAR-LOGGRO.md.
  *   · El JSON tiene costos internos (pricePurchase, avgCost): NO lo subas al repositorio.
  */
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 
 const entrada = process.argv[2];
 if (!entrada) { console.error('Uso: npm run catalogo -- ruta/productos-bacano.json'); process.exit(1); }
@@ -69,6 +69,12 @@ const CORRECCIONES = {
   '6ae3b216ac2fc19d00801830': { nombre: 'Nachos con Birria' },
   '6af4edf1b8e6258202b8cfe8': { nombre: 'Tacos x4' },
   '6ae171176a9e5dc2f94443e1': { nombre: 'Agua' },
+  // Nuevos en Loggro (23 nov 2026)
+  '6b00e26629e2f671ebd4fb0e': { nombre: 'Postobón Manzana Personal' },
+  '6b00e23829e2f671ebd4845e': { nombre: 'Gaseosa Quatro (Toronja)' },  // en Loggro "GASEOSA 4" = Quatro de toronja (Beth, 24 nov)
+  '6b00da6f61b4dedd039b3ac0': { nombre: 'Soda' },
+  '6afa701f9603187f3d464c12': { nombre: 'Mexipaleta' },
+  '6b00e7c6ada2be2853f6e41e': { nombre: 'Paletas' },
   // Variantes (subproductos)
   '6ae8d6e2e8da0ad9cefd59a0': { variante: 'Carne Asada' },
   '6ae8d6e2e8da0ad9cefd59a3': { variante: 'Pechuga Asada' },
@@ -156,7 +162,7 @@ const CARTAS = {
   heladeria: {
     header: 'Heladería y Botanas 🍨', marca: MARCA,
     secciones: {
-      'Helados 🍦': ['6ae3b88d27548bc4ddfea8fb', '6ae3b8c42f9b13af46c68936', '6ae3b8fdfd5558bc32ad2cd7', '6ae3b9d427548bc4dd01aae6', '6ae3ba9ecf805bbb35fad33e', '6ae3ddeebbbc4287b3e5b40b'],
+      'Helados 🍦': ['6ae3b88d27548bc4ddfea8fb', '6ae3b8c42f9b13af46c68936', '6ae3b8fdfd5558bc32ad2cd7', '6ae3b9d427548bc4dd01aae6', '6ae3ba9ecf805bbb35fad33e', '6ae3ddeebbbc4287b3e5b40b', '6afa701f9603187f3d464c12', '6b00e7c6ada2be2853f6e41e'],
       'Postres y botanas 🍫': ['6ae3b96b4888e1915220ac71', '6ae3ba264888e19152221d4f', '6ae3ba532f9b13af46cadb03', '6af4eccc815daed5a6171ad9'],
     },
   },
@@ -165,7 +171,7 @@ const CARTAS = {
     secciones: {
       'Jugos y frappés 🧃': ['6ae405ac8ab1d45d08eaa9c7', '6ae4056558f9b0a66b383d20', '6ae3de664888e191527d9519', '6ae3bb75fa10411a78e18c49', '6ae3ddafbbbc4287b3e4b73e'],
       'Micheladas y sodas 🍺': ['6ae3e057f7e40bd0d3440b8d', '6ae3e1b4595e36ff80a0bc0f', '6ae3e2232133aea23607b914', '6ae3baeb961e16e9ef024e27'],
-      'Gaseosas y agua 🥤': ['6ae4b83db62c2d5ffe26aa18', '6ae171176a9e5dc2f94443e1', '6af674eecb8f3c2e1d4a9fe8'],
+      'Gaseosas y agua 🥤': ['6ae4b83db62c2d5ffe26aa18', '6b00e26629e2f671ebd4fb0e', '6b00e23829e2f671ebd4845e', '6b00da6f61b4dedd039b3ac0', '6ae171176a9e5dc2f94443e1', '6af674eecb8f3c2e1d4a9fe8'],
     },
   },
 };
@@ -191,7 +197,6 @@ for (const p of productos) {
   if (!c.nombre && p.name !== nombrePadre) avisos.push(`- \`${p._id}\` "${p.name}" → se muestra como **${nombrePadre}** (solo mayúsculas/minúsculas).`);
   const area = p.waiterOrderArea ?? p.locationsStock?.[0]?.waiterOrderArea ?? null;
   if (!area) avisos.push(`- \`${p._id}\` **${nombrePadre}**: sin área de preparación (waiterOrderArea) en Loggro.`);
-  if (!p.urlImage) sinFoto.push(`- \`${p._id}\` **${nombrePadre}**`);
   const subs = (p.subProducts ?? []).filter((s) => s && typeof s === 'object');
   const base = { imagen: p.urlImage ?? '', area, descripcion: String(p.description ?? '').trim().replace(/\s+/g, ' '), categoria: p.category?.name ?? '' };
   if (!subs.length) {
@@ -227,6 +232,23 @@ for (const it of items) {
   it.nombre = n; vistos.set(n, it.id);
 }
 
+// Fotos puestas a mano en Meta (Administrador de ventas) que Loggro no tiene: se conservan las del CSV
+// actual (docs/catalogo-meta-bacano.csv, o el que indiques con CATALOGO_META_ACTUAL). Sirve el CSV tal
+// como lo guarda Excel (tabulaciones o ";", UTF-8 o Windows-1252).
+const fotosManuales = leerFotosCsv(process.env.CATALOGO_META_ACTUAL || new URL('../docs/catalogo-meta-bacano.csv', import.meta.url));
+for (const it of items) {
+  const manual = fotosManuales.get(it.id);
+  if (!it.imagen && manual) {
+    it.imagen = manual;
+    avisos.push(`- \`${it.id}\` **${it.nombre}**: sin foto en Loggro; se conserva la foto puesta a mano en Meta (${manual.split('/').pop()}).`);
+  }
+}
+for (const padre of [...new Set(items.map((it) => it.padre))]) {
+  const delPadre = items.filter((it) => it.padre === padre);
+  const sin = delPadre.filter((it) => !it.imagen);
+  if (sin.length) sinFoto.push(`- \`${padre}\` **${delPadre[0].tituloGrupo ?? delPadre[0].nombre}**${sin.length < delPadre.length ? ` (${sin.map((x) => x.variante ?? x.nombre).join(', ')})` : ''}`);
+}
+
 // Cartas y secciones.
 const seccionDe = new Map(); // padre → { carta, seccion }
 for (const [carta, c] of Object.entries(CARTAS)) for (const [sec, ids] of Object.entries(c.secciones)) for (const id of ids) seccionDe.set(id, { carta, seccion: sec });
@@ -240,6 +262,16 @@ for (const it of items) {
     if (!cartas[carta].sections.some((s) => s.title === 'Otros')) cartas[carta].sections.push({ title: 'Otros', productos: [] });
   }
   cartas[d.carta].sections.find((s) => s.title === d.seccion).productos.push(it.nombre);
+  it.seccion = `${d.carta}|${d.seccion}`;
+}
+// Sin área de preparación en Loggro: se usa la de los demás productos de su sección (si todos la comparten
+// o es la más común), para que la comanda llegue a la cocina o la barra correcta.
+for (const it of items) {
+  if (it.area) continue;
+  const cuenta = new Map();
+  for (const o of items) if (o.area && o.seccion === it.seccion) cuenta.set(o.area, (cuenta.get(o.area) ?? 0) + 1);
+  const [area] = [...cuenta.entries()].sort((a, b) => b[1] - a[1])[0] ?? [];
+  if (area) { it.area = area; avisos.push(`- \`${it.id}\` **${it.nombre}**: se le asignó el área de su sección (\`${area}\`) en la comanda de Loggro. Ponle el área en Loggro para confirmarla.`); }
 }
 // Dentro de cada sección, el orden de la tabla CARTAS (tacos primero, luego quesabirria…), no el alfabético de Loggro.
 const orden = new Map([...seccionDe.keys()].map((id, i) => [id, i]));
@@ -328,3 +360,27 @@ writeFileSync(new URL('../docs/REVISAR-LOGGRO.md', import.meta.url), rev.join('\
 console.log(`✔ ${items.length} productos (${grupos.length} grupos de variantes) → src/data/catalogo.js`);
 console.log(`✔ docs/catalogo-meta-bacano.csv (para Meta) · docs/productos-crm-bacano.csv (para el CRM) · docs/CATALOGOS.md`);
 console.log(`⚠ ${sinFoto.length} productos sin foto y ${avisos.length} avisos → docs/REVISAR-LOGGRO.md`);
+
+/** Lee id → image_link de un CSV de Meta (";" / tabulación / ","; UTF-8 o Windows-1252). */
+function leerFotosCsv(ruta) {
+  const mapa = new Map();
+  try {
+    if (!existsSync(ruta)) return mapa;
+    const buf = readFileSync(ruta);
+    let texto = buf.toString('utf8');
+    if (texto.includes('\uFFFD')) texto = buf.toString('latin1'); // Excel en Windows guarda en Windows-1252
+    texto = texto.replace(/^\uFEFF/, '');
+    const lineas = texto.split(/\r?\n/).filter((l) => l.trim());
+    const cab = lineas[0] ?? '';
+    const sep = ['\t', ';', ','].sort((a, b) => cab.split(b).length - cab.split(a).length)[0];
+    const cols = cab.split(sep).map((c) => c.replace(/^"|"$/g, '').trim());
+    const iId = cols.indexOf('id');
+    const iImg = cols.indexOf('image_link');
+    if (iId < 0 || iImg < 0) return mapa;
+    for (const l of lineas.slice(1)) {
+      const c = l.split(sep).map((x) => x.replace(/^"|"$/g, '').trim());
+      if (c[iId] && /^https?:\/\/\S+\.(jpe?g|png)$/i.test(c[iImg] ?? '')) mapa.set(c[iId], c[iImg]);
+    }
+  } catch (e) { console.warn('No se pudo leer el CSV actual de Meta:', e.message); }
+  return mapa;
+}

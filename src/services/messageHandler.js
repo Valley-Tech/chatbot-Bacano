@@ -15,6 +15,9 @@ import config from '../config/env.js';
 import negocio from '../config/negocio.js';
 import { datosDe, recordar, usarNombres } from './memoria.js';
 import { datosEnTexto, telefonoLocal, nombreLimpio, PAGOS } from './datosCliente.js';
+import { pideCarta, pideMenu, pideWeb, temaDelMenu } from './menuYCartas.js';
+import { esPreguntaDeServicio, respuestaServicio } from './horaColombia.js';
+import { fotoEnCatalogo } from './fotosCatalogo.js';
 
 // v1.1: la memoria muestra los productos por su nombre ("[Bot mostró el producto: Quesabirria]").
 usarNombres((id) => nombrePorId[id] ?? id);
@@ -113,6 +116,18 @@ class MessageHandler {
           await this.recibirComprobante(message);
         }
       } else {
+        // v1.2: fuera de horario también: "¿hay servicio?" con la hora real, y "menú" / "carta".
+        if (message?.type === 'text') {
+          const texto = String(message.text?.body ?? '').trim();
+          const resto = separarSaludo(texto).resto || texto;
+          if (esPreguntaDeServicio(resto)) {
+            sesion(from).avisoCerradoAt = Date.now();
+            await whatsappService.sendMessage(from, respuestaServicio(), message.id);
+            await whatsappService.markAsRead(message.id);
+            return;
+          }
+          if (await this.atenderMenuOCarta(from, resto)) { await whatsappService.markAsRead(message.id); return; }
+        }
         // Pedido de las últimas 3 h ("¿se demora?" después del cierre): lo atiende la IA, no el aviso de horario.
         const pedido = obtenerSesion(from)?.pedido;
         if (message?.type === 'text' && pedido?.enviadoAt && Date.now() - pedido.enviadoAt < 3 * 3600 * 1000) {
@@ -388,7 +403,41 @@ class MessageHandler {
       language: { code: config.CATALOG_TEMPLATE_LANG },
       components: [{ type: "button", sub_type: "CATALOG", index: 0 }],
     };
-    await whatsappService.sendCatalogo(to, template);
+    const enviado = await whatsappService.sendCatalogo(to, template);
+    if (!enviado) return this.menuCartas(to); // v1.2: plantilla rechazada → lista de cartas
+    return enviado;
+  }
+
+  /**
+   * v1.2 · "menú" y "carta" (ver services/menuYCartas.js). Devuelve true si lo atendió.
+   *   carta → el PDF (CARTA_URL); sin PDF → la carta del catálogo que nombró o la lista de cartas.
+   *   menú de un plato ("tacos") → carrusel solo de ese plato (si alguno no tiene foto, la carta);
+   *   menú de una carta ("bebidas") → esa carta; menú sin tema → catálogo de WhatsApp o lista de cartas;
+   *   "en la página web" / "el link" → MENU_WEB_URL (si está configurada).
+   */
+  async atenderMenuOCarta(from, t) {
+    const carta = pideCarta(t);
+    if (!carta && !pideMenu(t)) return false;
+    const tema = temaDelMenu(t);
+    if (pideWeb(t) && config.MENU_WEB_URL) {
+      await whatsappService.sendMessage(from, `Aquí tienes nuestro menú en la página web 👇\n${config.MENU_WEB_URL}`);
+      return true;
+    }
+    const key = tema ? this.cartaPorTexto(tema) : null;
+    if (carta) {
+      if (negocio.carta.url) { await this.sendMedia(from); return true; }
+      if (key) { await this.handleMenuOption(from, `cat:${key}`); return true; }
+      await this.menuCartas(from);
+      return true;
+    }
+    if (tema && hablaDePlatos(tema)) {
+      const { tarjetas } = await buscarPlatos(from, tema);
+      const conFoto = tarjetas.length > 0 && tarjetas.every((x) => fotoEnCatalogo(x.id));
+      if (conFoto && tarjetas.length <= 10) { await enviarTarjetas(from, tarjetas, tema); return true; }
+    }
+    if (key) { await this.handleMenuOption(from, `cat:${key}`); return true; }
+    await this.catalogo(from);
+    return true;
   }
 
   async handleMenuOption(to, option) {
@@ -710,8 +759,14 @@ class MessageHandler {
 
     // Palabras clave (igual que antes).
     if (lower === 'ayuda') return this.helpMenu(from);
-    if (lower.includes('carta')) return this.sendMedia(from);
-    if (/\bmen[uú]\b/.test(lower) && !hablaDePlatos(t)) return this.catalogo(from);
+    // v1.2: "carta" → el PDF; "menú" → catálogo, carta del tema o la página web (ver menuYCartas.js).
+    if (await this.atenderMenuOCarta(from, t)) return;
+    // v1.2: "¿hay servicio?", "¿están abiertos?", "¿a qué hora cierran?" → con la hora real de Colombia.
+    if (esPreguntaDeServicio(t)) {
+      await whatsappService.sendMessage(from, respuestaServicio());
+      if (this.pedidoPendiente(from)) await this.recordarPedido(from);
+      return;
+    }
     if (lower === 'ubicacion' || lower === 'ubicación') return this.sendLocation(from);
     if (lower === 'asesor') return this.sendContact(from);
 

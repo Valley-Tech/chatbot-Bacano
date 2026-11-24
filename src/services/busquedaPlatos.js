@@ -122,6 +122,7 @@ const SINONIMOS_BASE = {
   chelada: ['michelada'], michelada: ['michelada'], mixelada: ['michelada'],
   gaseosa: ['coca', 'cocacola', 'ginger'], refresco: ['coca', 'cocacola', 'ginger'], cola: ['coca'], coca: ['coca'],
   raspao: ['raspado'], granizado: ['raspado'], jamaica: ['jamaica'],
+  cuatro: ['quatro'], kuatro: ['quatro'], toronja: ['quatro'], postobon: ['postobon'], paleta: ['paleta', 'mexipaleta'], paletas: ['paleta', 'mexipaleta'],
 };
 const SINONIMOS = new Map(Object.entries(SINONIMOS_BASE).map(([k, v]) => [raiz(normalizar(k)), v.map((w) => raiz(normalizar(w)))]));
 const alternativas = (t) => [t, ...(SINONIMOS.get(t) ?? [])];
@@ -169,7 +170,7 @@ export function buscarLocal(texto) {
 // "salchipapa", "pizza", "hamburguesa", "jugo"… Un ingrediente solo ("pollo", "queso") no basta.
 // v1.1: más los tipos de plato de Bacano que no son la primera palabra del nombre ("cerezada",
 // "smoothie", "split") y cómo los llama la gente ("taquitos", "doritos locos", "chelada").
-const PALABRAS_PLATO = ['cerezada', 'smoothie', 'split', 'birria', 'quesabirria', 'birriamen', 'nachos', 'dorilocos', 'chamoyada', 'helamoyado', 'botanas', 'gomitas', 'raspado', 'soda', 'michelada', 'frappe', 'cono', 'copa', 'brownie', 'nevado', 'picada', 'asado', 'pechuga', 'lomo', 'taquito', 'doritos', 'chelada', 'gaseosa', 'refresco', 'coca', 'cocacola'];
+const PALABRAS_PLATO = ['cerezada', 'smoothie', 'split', 'birria', 'quesabirria', 'birriamen', 'nachos', 'dorilocos', 'chamoyada', 'helamoyado', 'botanas', 'gomitas', 'raspado', 'soda', 'michelada', 'frappe', 'cono', 'copa', 'brownie', 'nevado', 'picada', 'asado', 'pechuga', 'lomo', 'taquito', 'doritos', 'chelada', 'gaseosa', 'refresco', 'coca', 'cocacola', 'quatro', 'toronja', 'postobon', 'paleta', 'mexipaleta'];
 const PLATOS = new Set([
   ...[...INDICE.values()].flatMap((e) => [palabras(e.nombre)[0], palabras(e.tituloGrupo ?? '')[0], palabras(e.tituloSeccion)[0]]),
   ...PALABRAS_PLATO.flatMap(palabras),

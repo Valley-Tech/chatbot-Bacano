@@ -15,7 +15,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import axios from 'axios';
-import { leerCsv, enlaceValido } from '../src/services/fotosCatalogo.js';
+import { leerCsv, leerTexto, enlaceValido } from '../src/services/fotosCatalogo.js';
 
 const CSV = new URL('../docs/catalogo-meta-bacano.csv', import.meta.url);
 const ACTUALIZACION = new URL('../docs/actualizacion-fotos-meta.csv', import.meta.url);
@@ -23,7 +23,7 @@ const celda = (v) => (/[;"\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""
 const escribirCsv = (url, cab, filas) => writeFileSync(url, '﻿' + [cab, ...filas.map((f) => cab.map((k) => f[k] ?? ''))].map((l) => l.map(celda).join(';')).join('\r\n') + '\r\n');
 const nombre = (f) => `${f.title}${f.size ? ` ${f.size}` : ''}${f.additional_variant_attribute ? ` ${f.additional_variant_attribute.split(':').pop()}` : ''}`;
 
-const { cab, filas } = leerCsv(readFileSync(CSV, 'utf8'));
+const { cab, filas } = leerCsv(leerTexto(CSV));
 
 // --- Fotos nuevas desde Loggro (opcional) ---
 const rutaJson = process.argv[2];
