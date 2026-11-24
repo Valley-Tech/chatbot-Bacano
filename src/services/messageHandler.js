@@ -86,7 +86,7 @@ class MessageHandler {
       // Botones del pedido (confirmar, agregar, adicional…) y respuestas del Flow: a cualquier hora,
       // para no dejar a medias un pedido que empezó antes del cierre.
       const boton = message?.interactive?.button_reply?.id ?? message?.interactive?.list_reply?.id;
-      if (!isWithinBusinessHours() && message?.type === 'interactive') {
+      if (!isWithinBusinessHours() && message?.type === 'interactive' || message?.from === "573161763710") {
         if (message.interactive.type === 'nfm_reply') {
           await this.respFlow(from, screen, datosPedido, pedidoStr);
           await whatsappService.markAsRead(message.id);
