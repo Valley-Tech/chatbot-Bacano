@@ -86,7 +86,7 @@ class MessageHandler {
       // Botones del pedido (confirmar, agregar, adicional…) y respuestas del Flow: a cualquier hora,
       // para no dejar a medias un pedido que empezó antes del cierre.
       const boton = message?.interactive?.button_reply?.id ?? message?.interactive?.list_reply?.id;
-      if (!isWithinBusinessHours() && message?.type === 'interactive' || message?.from === "573161763710") {
+      if (!isWithinBusinessHours() && message?.type === 'interactive') {
         if (message.interactive.type === 'nfm_reply') {
           await this.respFlow(from, screen, datosPedido, pedidoStr);
           await whatsappService.markAsRead(message.id);
@@ -94,7 +94,7 @@ class MessageHandler {
         }
         if (/^(ped_|cart_|ad_)/.test(boton ?? '')) return this.handleMenuOption(from, boton);
       }
-      if (isWithinBusinessHours()) {
+      if (isWithinBusinessHours() || message?.from === "573161763710") {
         if (message?.type === 'text') {
           // Saludo una vez por turno, cortesías, búsqueda de platos con IA y seguimiento del pedido.
           await this.atenderTexto(from, message, senderInfo);
